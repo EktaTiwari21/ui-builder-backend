@@ -1,3 +1,12 @@
+---
+title: UI Builder Backend
+emoji: 🧠
+colorFrom: purple
+colorTo: blue
+sdk: docker
+app_port: 7860
+---
+
 # Autonomous UI Builder Agent — Backend
 
 A FastAPI backend that receives user prompts from the frontend, orchestrates AI agents (Gemini for planning, OpenAI for code generation), validates output, and streams React + Tailwind component code back to the client using Server-Sent Events (SSE).
@@ -13,7 +22,7 @@ A FastAPI backend that receives user prompts from the frontend, orchestrates AI 
 - **Database / Auth**: Supabase (PostgreSQL, Supabase Auth)
 - **Streaming**: Server-Sent Events (SSE) via `sse-starlette`
 - **Testing**: Pytest + pytest-asyncio
-- **Deploy**: Railway / Docker
+- **Deploy**: Hugging Face Spaces / Docker
 
 ---
 
@@ -108,15 +117,15 @@ Improves existing generated UI based on feedback instructions.
 Retrieve all projects for the authenticated user.
 - **Response**: List of project records.
 
-### 4. `GET /project/{id}`
+### 5. `GET /project/{id}`
 Retrieve details of a single project by ID.
 - **Response**: Detailed project metadata and code.
 
-### 5. `DELETE /project/{id}`
+### 6. `DELETE /project/{id}`
 Delete a project by ID.
 - **Response**: `{"success": true}`
 
-### 6. `POST /export-project`
+### 7. `POST /export-project`
 Export the project code and return a download URL.
 - **Request Body**:
   ```json
@@ -125,7 +134,7 @@ Export the project code and return a download URL.
   }
   ```
 
-### 7. `GET /health`
+### 8. `GET /health`
 System health check. No authentication required.
 
 ---
@@ -136,8 +145,8 @@ System health check. No authentication required.
 A `Dockerfile` is provided for containerized deployments:
 ```bash
 docker build -t ui-builder-backend .
-docker run -p 8000:8000 --env-file .env ui-builder-backend
+docker run -p 7860:7860 --env-file .env ui-builder-backend
 ```
 
-### Railway
-This project is configured for deployment on Railway using the [railway.toml](file:///e:/ui-builder-backend/railway.toml) file. Deployment triggers automatically on push to the `main` branch.
+### Hugging Face Spaces
+This project is configured for deployment on Hugging Face Spaces using Docker. Ensure your space has the appropriate environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY`, etc.) configured in its settings dashboard.
