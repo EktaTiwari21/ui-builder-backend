@@ -10,16 +10,17 @@ app = FastAPI(
 )
 
 # Configure CORS
-# Only allow FRONTEND_URL from settings as per security rules
-origins = [settings.frontend_url]
+# Allow both FRONTEND_URL from settings and localhost:3000 for local development
+origins = list({settings.frontend_url, "http://localhost:3000", "http://127.0.0.1:3000"})
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
 
 @app.get("/health", tags=["System"])
 async def health_check():
