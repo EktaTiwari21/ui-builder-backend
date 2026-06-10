@@ -1,6 +1,7 @@
 import json
 import logging
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.config import settings
 from app.services.prompt_parser import ParsedPrompt
 
@@ -26,8 +27,8 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
         raise PlannerError("Gemini API key is not configured in environment variables.")
 
     try:
-        # Initialize/Configure SDK
-        genai.configure(api_key=settings.gemini_api_key)
+        # Initialize the new google-genai Client
+        client = genai.Client(api_key=settings.gemini_api_key)
 
         system_instruction = (
             "You are an expert UI architect specializing in React and Tailwind CSS.\n"
@@ -53,11 +54,6 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
             "}"
         )
 
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro",
-            system_instruction=system_instruction
-        )
-
         prompt_input = (
             f"UI Type: {parsed_prompt.ui_type}\n"
             f"Color Style: {parsed_prompt.color_style}\n"
@@ -66,15 +62,15 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
             f"User Prompt: {parsed_prompt.raw_prompt}\n"
         )
 
-        generation_config = {
-            "response_mime_type": "application/json",
-            "max_output_tokens": 2000
-        }
-
-        # Query the API asynchronously
-        response = await model.generate_content_async(
-            prompt_input,
-            generation_config=generation_config
+        # Query the API asynchronously using the new Client.aio namespace
+        response = await client.aio.models.generate_content(
+            model="gemini-1.5-pro",
+            contents=prompt_input,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                response_mime_type="application/json",
+                max_output_tokens=2000
+            )
         )
 
         if not response or not response.text:
