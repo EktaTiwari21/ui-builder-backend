@@ -62,9 +62,12 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
             f"User Prompt: {parsed_prompt.raw_prompt}\n"
         )
 
+        model_name = "gemini-2.5-flash"
+        logger.info(f"Querying Gemini API. Model: {model_name}, SDK Version: {genai.__version__}")
+
         # Query the API asynchronously using the new Client.aio namespace
         response = await client.aio.models.generate_content(
-            model="gemini-1.5-pro",
+            model=model_name,
             contents=prompt_input,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
@@ -90,5 +93,9 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
         logger.error(f"Failed to decode planner response as JSON: {e}")
         raise PlannerError(f"Invalid JSON format in planner output: {str(e)}")
     except Exception as e:
-        logger.error(f"Planning agent execution failed: {e}")
+        logger.error(
+            f"Planning agent execution failed. Model: {model_name if 'model_name' in locals() else 'unknown'}, SDK Version: {genai.__version__}. "
+            f"Error: {e}",
+            exc_info=True
+        )
         raise PlannerError(f"Planning agent execution failed: {str(e)}")
