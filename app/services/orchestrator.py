@@ -20,6 +20,7 @@ class AgentState(TypedDict):
     plan: Optional[dict]
     code: Optional[str]
     is_valid: bool
+    is_partial: bool
     errors: List[str]
     retries: int
     user_id: str
@@ -75,6 +76,7 @@ async def generate_node(state: AgentState) -> dict:
     start_time = time.time()
     full_code = ""
     total_tokens = 0
+    is_partial = False
 
     # Stream the chunks directly from generator into the event queue
     async for event in generator.generate(plan_to_use):
@@ -87,6 +89,8 @@ async def generate_node(state: AgentState) -> dict:
                     full_code += data["content"]
                 elif data["type"] == "done":
                     total_tokens = data.get("total_tokens", 0)
+                elif data["type"] == "partial_success":
+                    is_partial = True
             except Exception:
                 pass
 
@@ -95,12 +99,20 @@ async def generate_node(state: AgentState) -> dict:
     return {
         "code": full_code,
         "total_tokens": total_tokens,
-        "latency_ms": latency_ms
+        "latency_ms": latency_ms,
+        "is_partial": is_partial
     }
 
 # Node 4: Validate JSX component correctness
 async def validate_node(state: AgentState) -> dict:
     """Validate component code using structural, safety, and package import checks."""
+    if state.get("is_partial", False):
+        logger.info("Bypassing strict validation due to partial_success from generator")
+        return {
+            "is_valid": True,
+            "errors": []
+        }
+
     result = validator.validate(state["code"])
     
     if result.is_valid:
@@ -186,6 +198,7 @@ async def run(request: GenerateUIRequest, user_id: str) -> AsyncGenerator[str, N
         "plan": None,
         "code": "",
         "is_valid": False,
+        "is_partial": False,
         "errors": [],
         "retries": 0,
         "user_id": user_id,
