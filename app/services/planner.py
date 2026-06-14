@@ -62,74 +62,104 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
             f"User Prompt: {parsed_prompt.raw_prompt}\n"
         )
 
-        model_name = "gemini-2.5-flash"
-        logger.info(f"Querying Gemini API. Model: {model_name}, SDK Version: {genai.__version__}")
+        fallback_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"]
+        last_critical_error = "MODEL_QUOTA_EXCEEDED"
+        
+        for model_name in fallback_models:
+            logger.info(f"Querying Gemini API. Model: {model_name}, SDK Version: {genai.__version__}")
 
-        max_retries = 2
-        last_error = None
-        raw_text = ""
+            max_retries = 2
+            last_error = None
+            raw_text = ""
 
-        for attempt in range(1, max_retries + 1):
-            try:
-                if attempt == 1:
-                    # Query the API asynchronously using the new Client.aio namespace
-                    response = await client.aio.models.generate_content(
-                        model=model_name,
-                        contents=prompt_input,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_instruction,
-                            response_mime_type="application/json",
-                            max_output_tokens=4000
+            for attempt in range(1, max_retries + 1):
+                try:
+                    if attempt == 1:
+                        # Query the API asynchronously using the new Client.aio namespace
+                        response = await client.aio.models.generate_content(
+                            model=model_name,
+                            contents=prompt_input,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_instruction,
+                                response_mime_type="application/json",
+                                max_output_tokens=4000
+                            )
                         )
-                    )
-                else:
-                    logger.warning(f"Attempting to repair JSON with Gemini (Attempt {attempt})...")
-                    repair_prompt = (
-                        f"You previously generated an invalid JSON response. The parser threw this error: {last_error}\n\n"
-                        f"Here is your previous broken output:\n```json\n{raw_text}\n```\n\n"
-                        "Please fix the structural errors and output ONLY valid JSON matching the required schema. Do not change the design."
-                    )
-                    response = await client.aio.models.generate_content(
-                        model=model_name,
-                        contents=repair_prompt,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_instruction,
-                            response_mime_type="application/json",
-                            max_output_tokens=4000
+                    else:
+                        logger.warning(f"Attempting to repair JSON with Gemini {model_name} (Attempt {attempt})...")
+                        repair_prompt = (
+                            f"You previously generated an invalid JSON response. The parser threw this error: {last_error}\n\n"
+                            f"Here is your previous broken output:\n```json\n{raw_text}\n```\n\n"
+                            "Please fix the structural errors and output ONLY valid JSON matching the required schema. Do not change the design."
                         )
-                    )
+                        response = await client.aio.models.generate_content(
+                            model=model_name,
+                            contents=repair_prompt,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_instruction,
+                                response_mime_type="application/json",
+                                max_output_tokens=4000
+                            )
+                        )
 
-                if not response or not response.text:
-                    raise PlannerError("Gemini API returned an empty response.")
-                
-                raw_text = response.text
-                
-                # Enhanced Logging
-                logger.info(f"Planner raw response length: {len(raw_text)} characters.")
-                logger.debug(f"Planner raw response (first 1000 chars):\n{raw_text[:1000]}")
-                logger.debug(f"Planner raw response (last 1000 chars):\n{raw_text[-1000:]}")
-                logger.debug(f"Planner full raw response:\n{raw_text}")
+                    if not response or not response.text:
+                        raise PlannerError("Gemini API returned an empty response.")
+                    
+                    raw_text = response.text
+                    
+                    # Enhanced Logging
+                    logger.info(f"Planner raw response length: {len(raw_text)} characters.")
+                    logger.debug(f"Planner raw response (first 1000 chars):\n{raw_text[:1000]}")
+                    logger.debug(f"Planner raw response (last 1000 chars):\n{raw_text[-1000:]}")
+                    logger.debug(f"Planner full raw response:\n{raw_text}")
 
-                plan_data = json.loads(raw_text)
+                    plan_data = json.loads(raw_text)
 
-                # Validate layout structure response
-                required_keys = ["layout", "components", "color_palette", "typography"]
-                for key in required_keys:
-                    if key not in plan_data:
-                        raise PlannerError(f"Planner output missing key: '{key}'")
+                    # Validate layout structure response
+                    required_keys = ["layout", "components", "color_palette", "typography"]
+                    for key in required_keys:
+                        if key not in plan_data:
+                            raise PlannerError(f"Planner output missing key: '{key}'")
 
-                return plan_data
+                    return plan_data
 
-            except json.JSONDecodeError as e:
-                last_error = str(e)
-                logger.error(f"Failed to decode planner response as JSON on attempt {attempt}: {e}")
-                if attempt == max_retries:
-                    raise PlannerError(f"Invalid JSON format in planner output after {max_retries} attempts: {str(e)}")
-                # Loop continues for repair attempt
+                except json.JSONDecodeError as e:
+                    last_error = str(e)
+                    logger.error(f"Failed to decode planner response as JSON on attempt {attempt}: {e}")
+                    if attempt == max_retries:
+                        logger.error(f"Invalid JSON format in planner output after {max_retries} attempts on {model_name}. Trying next fallback...")
+                        last_critical_error = f"Invalid JSON format in planner output: {last_error}"
+                        break # Break inner loop, try next model
+                    # Loop continues for repair attempt
+                    
+                except PlannerError as e:
+                    last_critical_error = str(e)
+                    logger.error(f"Planning agent execution failed for {model_name}: {e}")
+                    break # Break inner loop, try next model
+                    
+                except Exception as e:
+                    err_str = str(e)
+                    logger.error(f"Planning agent execution failed for {model_name}: {e}", exc_info=True)
+                    is_quota = "429" in err_str or "quota" in err_str.lower() or "RESOURCE_EXHAUSTED" in err_str
+                    if is_quota:
+                        logger.warning(f"Quota exceeded for {model_name} in planner. Stopping retries for this model.")
+                        last_critical_error = "MODEL_QUOTA_EXCEEDED"
+                        break # Break inner loop, try next model
+                    
+                    last_critical_error = f"Planning agent execution failed: {str(e)}"
+                    break # Break inner loop, try next model
+
+        # If all fallback models failed
+        if last_critical_error == "MODEL_QUOTA_EXCEEDED":
+            raise PlannerError("MODEL_QUOTA_EXCEEDED")
+        else:
+            raise PlannerError(last_critical_error)
+
+    except PlannerError:
+        raise # Reraise PlannerError to be handled directly
     except Exception as e:
         logger.error(
-            f"Planning agent execution failed. Model: {model_name if 'model_name' in locals() else 'unknown'}, SDK Version: {genai.__version__}. "
-            f"Error: {e}",
+            f"Planning agent execution failed completely. Error: {e}",
             exc_info=True
         )
         raise PlannerError(f"Planning agent execution failed: {str(e)}")
