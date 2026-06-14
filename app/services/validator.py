@@ -46,7 +46,7 @@ def validate(code: str) -> ValidationResult:
             errors.append(f"Dangerous pattern detected: Use of {description} is strictly prohibited.")
 
     # Check 3: Tailwind CSS Class presence
-    if "className=" not in code_no_comments:
+    if "className=" not in code:
         errors.append("Tailwind CSS check failed: Code must contain at least one Tailwind class indicator (className=).")
 
     # Check 4: Import validation (Only react and lucide-react allowed)

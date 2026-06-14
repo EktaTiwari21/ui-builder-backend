@@ -106,6 +106,11 @@ async def generate_node(state: AgentState) -> dict:
 # Node 4: Validate JSX component correctness
 async def validate_node(state: AgentState) -> dict:
     """Validate component code using structural, safety, and package import checks."""
+    code = state.get("code", "")
+    logger.info(f"[VALIDATION DEBUG] Code length: {len(code)}")
+    logger.info(f"[VALIDATION DEBUG] First 500 chars:\n{code[:500]}")
+    logger.info(f"[VALIDATION DEBUG] Last 500 chars:\n{code[-500:]}")
+
     if state.get("is_partial", False):
         logger.info("Bypassing strict validation due to partial_success from generator")
         return {
