@@ -231,13 +231,24 @@ async def run(request: GenerateUIRequest, user_id: str) -> AsyncGenerator[str, N
     task = asyncio.create_task(graph.ainvoke(initial_state))
 
     # Consume and yield SSE events from the queue while the task is executing
+    # Send a keepalive comment every 15s to prevent proxy/HF Spaces from closing idle connections
+    keepalive_interval = 15.0
+    time_since_last_event = 0.0
+    poll_timeout = 0.1  # seconds
+
     while not task.done() or not event_queue.empty():
         try:
-            event = await asyncio.wait_for(event_queue.get(), timeout=0.1)
+            event = await asyncio.wait_for(event_queue.get(), timeout=poll_timeout)
             # Yield event to FastAPI StreamingResponse
             yield event
             event_queue.task_done()
+            time_since_last_event = 0.0
         except asyncio.TimeoutError:
+            time_since_last_event += poll_timeout
+            if time_since_last_event >= keepalive_interval:
+                # SSE comment lines are ignored by the frontend but keep the connection alive
+                yield ": keepalive\n\n"
+                time_since_last_event = 0.0
             continue
 
     # Await task completion to fetch final state and trigger any potential exceptions
