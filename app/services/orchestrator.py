@@ -79,20 +79,34 @@ async def generate_node(state: AgentState) -> dict:
     is_partial = False
 
     # Stream the chunks directly from generator into the event queue
+    # NOTE: 'generator_done' events are consumed internally (for token tracking) and
+    # NOT forwarded to the client — the real 'done' with project_id is emitted later
+    # by the orchestrator itself after saving to the DB.
     async for event in generator.generate(plan_to_use):
-        await state["event_queue"].put(event)
-        
         if event.startswith("data: "):
             try:
                 data = json.loads(event[6:-2])
                 if data["type"] == "chunk":
                     full_code += data["content"]
-                elif data["type"] == "done":
+                    # Forward chunk events to the client
+                    await state["event_queue"].put(event)
+                elif data["type"] == "generator_done":
+                    # Capture tokens internally, do NOT forward to client
                     total_tokens = data.get("total_tokens", 0)
                 elif data["type"] == "partial_success":
                     is_partial = True
+                    await state["event_queue"].put(event)
+                elif data["type"] in ("plan", "error"):
+                    # Forward plan status and error events to the client
+                    await state["event_queue"].put(event)
+                else:
+                    # Forward any other event types
+                    await state["event_queue"].put(event)
             except Exception:
-                pass
+                # If we can't parse it, forward it anyway
+                await state["event_queue"].put(event)
+        else:
+            await state["event_queue"].put(event)
 
     latency_ms = int((time.time() - start_time) * 1000)
     

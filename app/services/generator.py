@@ -81,8 +81,10 @@ async def generate(plan: dict) -> AsyncGenerator[str, None]:
                 chunk_event = {"type": "chunk", "content": content}
                 yield f"data: {json.dumps(chunk_event)}\n\n"
 
-        # 4. Emit complete event
-        done_event = {"type": "done", "total_tokens": total_tokens}
+        # 4. Emit internal complete event (type=generator_done — NOT sent to client,
+        # only consumed by the orchestrator to capture total_tokens before
+        # the orchestrator emits the real 'done' event with project_id)
+        done_event = {"type": "generator_done", "total_tokens": total_tokens}
         yield f"data: {json.dumps(done_event)}\n\n"
 
     except Exception as e:
@@ -119,7 +121,7 @@ async def generate(plan: dict) -> AsyncGenerator[str, None]:
             from google.genai import types
 
             gemini_client = genai.Client(api_key=settings.gemini_api_key)
-            fallback_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"]
+            fallback_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
             
             for model_name_gemini in fallback_models:
                 logger.info(f"Initiating fallback to {model_name_gemini} for code generation...")
@@ -142,7 +144,7 @@ async def generate(plan: dict) -> AsyncGenerator[str, None]:
                             contents=f"Here is the UI design plan:\n{json.dumps(plan, indent=2)}",
                             config=types.GenerateContentConfig(
                                 system_instruction=SYSTEM_PROMPT,
-                                max_output_tokens=4000
+                                max_output_tokens=8192
                             )
                         )
 
@@ -153,8 +155,8 @@ async def generate(plan: dict) -> AsyncGenerator[str, None]:
                                 chunk_event = {"type": "chunk", "content": gemini_chunk.text}
                                 yield f"data: {json.dumps(chunk_event)}\n\n"
 
-                        # Emit done event for Gemini stream
-                        done_event = {"type": "done", "total_tokens": 0}
+                        # Emit internal done event (orchestrator reads it, client ignores it)
+                        done_event = {"type": "generator_done", "total_tokens": 0}
                         yield f"data: {json.dumps(done_event)}\n\n"
                         model_success = True
                         return # Successfully completed

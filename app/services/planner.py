@@ -62,7 +62,7 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
             f"User Prompt: {parsed_prompt.raw_prompt}\n"
         )
 
-        fallback_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"]
+        fallback_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
         last_critical_error = "MODEL_QUOTA_EXCEEDED"
         
         for model_name in fallback_models:

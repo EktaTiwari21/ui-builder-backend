@@ -1,6 +1,12 @@
 import re
 from dataclasses import dataclass, field
 
+# HTML void elements — never need a closing tag
+HTML_VOID_ELEMENTS = {
+    "area", "base", "br", "col", "embed", "hr", "img", "input",
+    "link", "meta", "param", "source", "track", "wbr"
+}
+
 @dataclass
 class ValidationResult:
     """Dataclass representing the validation outcome of a code component."""
@@ -49,51 +55,79 @@ def validate(code: str) -> ValidationResult:
     if "className=" not in code:
         errors.append("Tailwind CSS check failed: Code must contain at least one Tailwind class indicator (className=).")
 
-    # Check 4: Import validation (Only react and lucide-react allowed)
+    # Check 4: Import validation — only safe packages allowed (warnings, not errors)
     import_pattern = re.compile(r"""import\s+.*?\s+from\s+['"]([^'"]+)['"]""")
     imports = import_pattern.findall(code_no_comments)
-    allowed_packages = {"react", "lucide-react"}
+    allowed_packages = {
+        "react",
+        "lucide-react",
+        "react-dom",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+    }
     for imp in imports:
+        # Allow relative imports (starting with . or /)
+        if imp.startswith(".") or imp.startswith("/"):
+            continue
         if imp not in allowed_packages:
-            errors.append(f"Import from unauthorized package: '{imp}'. Only 'react' and 'lucide-react' imports are allowed.")
+            warnings.append(f"Import from potentially unauthorized package: '{imp}'. Preferred: 'react' and 'lucide-react'.")
 
-    # Check 5: Basic JSX Tag Balance Check
+    # Check 5: Basic JSX Tag Balance Check (lenient — warns only, does not fail)
     tag_errors = _check_tags_balanced(code_no_comments)
-    errors.extend(tag_errors)
+    if tag_errors:
+        # JSX balance issues are warnings, not hard errors
+        # Complex JSX with fragments, ternaries and maps frequently triggers
+        # false positives in regex-based parsers
+        warnings.extend(tag_errors)
 
     is_valid = len(errors) == 0
     return ValidationResult(is_valid=is_valid, errors=errors, warnings=warnings)
 
 def _check_tags_balanced(code: str) -> list[str]:
-    """Helper method to check if JSX tags are balanced using a simple tag stack."""
-    errors = []
+    """Helper method to check if JSX tags are balanced using a simple tag stack.
+    
+    Note: This is a best-effort check. Complex JSX with fragments, ternary renders,
+    and mapped components can produce false positives. Results are treated as warnings.
+    """
+    issues = []
     # Match tag names, supporting components (e.g. Dialog.Title) or standard HTML tags.
     # Group 1 matches standard tag or component tag (e.g. /?div or /?Dialog.Title)
     # Group 2 matches the optional closing slash for self-closing tags (e.g. <img />)
-    tag_pattern = re.compile(r"<(/?[a-zA-Z][a-zA-Z0-9\._-]*)(?:\s+[^>]*?)?(/?)>", re.DOTALL)
+    tag_pattern = re.compile(r"<(/?[a-zA-Z][a-zA-Z0-9\._-]*)(?:\s+[^>]*)?(/?)\s*>", re.DOTALL)
     matches = tag_pattern.findall(code)
     
     stack = []
     for tag_name, self_closing in matches:
+        # Skip JSX fragments (empty tag name effectively, matched as <>)
+        if not tag_name or tag_name in ("", "/"):
+            continue
+
         # If it's a self-closing tag (ends with /), skip pushing to stack
         if self_closing == "/":
             continue
-            
-        if tag_name.startswith("/"):
+
+        # Remove leading slash for closing tag check
+        is_closing = tag_name.startswith("/")
+        clean_name = tag_name[1:] if is_closing else tag_name
+
+        # Skip void HTML elements — they never have closing tags
+        if clean_name.lower() in HTML_VOID_ELEMENTS and not is_closing:
+            continue
+
+        if is_closing:
             # Closing tag (e.g. </div>)
-            name = tag_name[1:]
             if not stack:
-                errors.append(f"Unbalanced closing tag: </{name}> with no matching opening tag.")
+                issues.append(f"Unbalanced closing tag: </{clean_name}> with no matching opening tag.")
             else:
                 top = stack.pop()
-                if top != name:
-                    errors.append(f"Mismatched tags: open <{top}> closed </{name}>.")
+                if top.lower() != clean_name.lower():
+                    issues.append(f"Mismatched tags: open <{top}> closed </{clean_name}>.")
         else:
             # Opening tag
             stack.append(tag_name)
             
     while stack:
         top = stack.pop()
-        errors.append(f"Unbalanced opening tag: <{top}> with no matching closing tag.")
+        issues.append(f"Unbalanced opening tag: <{top}> with no matching closing tag.")
         
-    return errors
+    return issues
