@@ -137,10 +137,10 @@ async def generate(plan: dict) -> AsyncGenerator[str, None]:
             return
 
         fallback_models = [
-            "gemini-2.5-flash",        # Latest, v1beta
-            "gemini-2.0-flash",         # Stable, v1beta
-            "gemini-2.0-flash-lite",    # Lightweight, v1beta
-            "gemini-1.5-flash-8b",      # Smallest, v1beta
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
         ]
 
 
