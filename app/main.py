@@ -354,50 +354,6 @@ async def diagnostics():
         "frontend_url": settings.frontend_url
     }
 
-@app.get("/test-gemini", tags=["System"])
-async def test_gemini_endpoint():
-    """Runs a live test of the Gemini API from the server's network location."""
-    from google import genai
-    api_key = settings.gemini_api_key
-    if not api_key:
-        return {"error": "Gemini API key is not configured."}
-    try:
-        client = genai.Client(api_key=api_key)
-        models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"]
-        results = {}
-        for m in models:
-            try:
-                res = client.models.generate_content(
-                    model=m,
-                    contents="Write a one-word answer: Hello!"
-                )
-                results[m] = {"status": "success", "response": res.text.strip() if res.text else None}
-            except Exception as e:
-                results[m] = {"status": "failed", "error": str(e)}
-        return results
-    except Exception as outer_err:
-        return {"status": "failed", "outer_error": str(outer_err)}
-
-@app.get("/test-openai", tags=["System"])
-async def test_openai_endpoint():
-    """Runs a live test of the OpenAI API from the server's network location."""
-    from openai import AsyncOpenAI
-    api_key = settings.openai_api_key
-    if not api_key:
-        return {"error": "OpenAI API key is not configured."}
-    try:
-        client = AsyncOpenAI(api_key=api_key)
-        res = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": "Hello!"}],
-            max_tokens=10
-        )
-        return {"status": "success", "response": res.choices[0].message.content}
-    except Exception as e:
-        return {"status": "failed", "error": str(e)}
-
-
-
 # Register routers
 app.include_router(auth.router)
 app.include_router(generate.router)
