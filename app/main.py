@@ -340,6 +340,21 @@ async def health_check():
         "environment": settings.environment
     }
 
+@app.get("/diagnostics", tags=["System"])
+async def diagnostics():
+    """Diagnostics route to verify environment configuration variables."""
+    return {
+        "supabase_url": settings.supabase_url,
+        "supabase_service_key_length": len(settings.supabase_service_key) if settings.supabase_service_key else 0,
+        "gemini_api_key_prefix": settings.gemini_api_key[:6] + "..." if settings.gemini_api_key else None,
+        "gemini_api_key_length": len(settings.gemini_api_key) if settings.gemini_api_key else 0,
+        "openai_api_key_prefix": settings.openai_api_key[:6] + "..." if settings.openai_api_key else None,
+        "openai_api_key_length": len(settings.openai_api_key) if settings.openai_api_key else 0,
+        "environment": settings.environment,
+        "frontend_url": settings.frontend_url
+    }
+
+
 # Register routers
 app.include_router(auth.router)
 app.include_router(generate.router)
