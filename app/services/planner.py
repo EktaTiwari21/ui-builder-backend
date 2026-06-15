@@ -164,7 +164,34 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
                     last_critical_error = f"Planning agent execution failed: {str(e)}"
                     break  # Break inner loop, try next model
 
-        # If all fallback models failed
+        # If all fallback models failed, try OpenAI gpt-4o as ultimate fallback
+        openai_key = settings.openai_api_key or ""
+        skip_openai = not openai_key or openai_key.startswith("dummy") or openai_key == "sk-placeholder"
+        if not skip_openai:
+            logger.info("Gemini fallback exhausted. Attempting ultimate fallback to OpenAI gpt-4o for planning...")
+            try:
+                from openai import AsyncOpenAI
+                openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+                response = await openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": prompt_input}
+                    ],
+                    response_format={"type": "json_object"},
+                    max_tokens=4000
+                )
+                raw_text = response.choices[0].message.content
+                if raw_text:
+                    plan_data = json.loads(raw_text)
+                    required_keys = ["layout", "components", "color_palette", "typography"]
+                    for key in required_keys:
+                        if key not in plan_data:
+                            raise PlannerError(f"OpenAI Planner output missing key: '{key}'")
+                    return plan_data
+            except Exception as openai_err:
+                logger.error(f"Ultimate fallback to OpenAI failed: {openai_err}", exc_info=True)
+
         if last_critical_error == "MODEL_QUOTA_EXCEEDED":
             raise PlannerError("MODEL_QUOTA_EXCEEDED")
         else:
