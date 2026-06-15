@@ -51,8 +51,16 @@ async def get_current_user(
                 response = await client.auth.get_user(token)
                 if response and response.user:
                     return response.user
-            except Exception:
-                pass  # fall through to mock
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail={"code": "INVALID_TOKEN", "message": "Token is invalid or revoked."},
+                )
+            except Exception as e:
+                logger.error(f"Development token verification failed: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail={"code": "AUTH_FAILED", "message": f"Authentication failed: {e}"},
+                )
 
         class MockUser:
             id = "00000000-0000-0000-0000-000000000000"
