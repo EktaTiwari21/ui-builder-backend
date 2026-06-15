@@ -35,11 +35,11 @@ def validate(code: str) -> ValidationResult:
     code_no_comments = re.sub(r"/\*.*?\*/", "", code, flags=re.DOTALL)
     code_no_comments = re.sub(r"//.*", "", code_no_comments)
 
-    # Check 1: Named Export Check
-    # Must contain "export function" or "export const" or "export class"
-    export_pattern = re.compile(r"\bexport\s+(?:function|const|class|async\s+function)\b")
+    # Check 1: Export Check
+    # Must contain "export function", "export const", "export class", or "export default"
+    export_pattern = re.compile(r"\bexport\s+(?:default\s+)?(?:function|const|class|async\s+function)\b|\bexport\s+default\s+[a-zA-Z0-9_]+\b")
     if not export_pattern.search(code_no_comments):
-        errors.append("Missing named export: Component must have at least one named export (e.g. 'export function MyComponent').")
+        errors.append("Missing named export: Component must have at least one named export or default export (e.g. 'export function MyComponent' or 'export default MyComponent').")
 
     # Check 2: Unsafe/Dangerous patterns
     dangerous_keywords = {
