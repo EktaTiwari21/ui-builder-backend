@@ -43,6 +43,9 @@ async def get_project(project_id: UUID, user = Depends(get_current_user)):
 @router.delete("/project/{project_id}")
 async def delete_project(project_id: UUID, user = Depends(get_current_user)):
     """Delete a project by ID."""
+    deleted_project = await db.delete_project(project_id=str(project_id), user_id=str(user.id))
+    if not deleted_project:
+        raise HTTPException(status_code=404, detail="Project not found or not owned by user.")
     return {"success": True, "deleted_by": str(user.id)}
 
 

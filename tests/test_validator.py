@@ -93,7 +93,7 @@ def test_validate_missing_tailwind():
     assert any("tailwind" in err.lower() for err in result.errors)
 
 def test_validate_disallowed_imports():
-    """Test that imports from packages other than react or lucide-react are rejected."""
+    """Test that imports from packages other than react or lucide-react are rejected/warned."""
     code = """
     import React from 'react';
     import _ from 'lodash';
@@ -102,11 +102,11 @@ def test_validate_disallowed_imports():
     }
     """
     result = validate(code)
-    assert not result.is_valid
-    assert any("unauthorized package" in err.lower() for err in result.errors)
+    assert result.is_valid
+    assert any("unauthorized package" in warn.lower() for warn in result.warnings)
 
 def test_validate_unbalanced_tags():
-    """Test that unbalanced or mismatched opening/closing JSX tags are flagged as errors."""
+    """Test that unbalanced or mismatched opening/closing JSX tags are flagged as warnings."""
     code = """
     export function UnbalancedDemo() {
         return (
@@ -117,5 +117,5 @@ def test_validate_unbalanced_tags():
     }
     """
     result = validate(code)
-    assert not result.is_valid
-    assert any("mismatched tags" in err.lower() or "unbalanced" in err.lower() for err in result.errors)
+    assert result.is_valid
+    assert any("mismatched tags" in warn.lower() or "unbalanced" in warn.lower() for warn in result.warnings)

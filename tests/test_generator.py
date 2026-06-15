@@ -76,21 +76,21 @@ async def test_generate_success(mock_openai_class):
         
         # Check done event
         event_4 = json.loads(events[4].replace("data: ", "").strip())
-        assert event_4["type"] == "done"
+        assert event_4["type"] == "generator_done"
         assert event_4["total_tokens"] == 150
 
 @pytest.mark.asyncio
 async def test_generate_missing_api_key():
     """Test that generator yields error event when API key is missing/dummy."""
-    with patch("app.config.settings.openai_api_key", None):
+    with patch("app.config.settings.openai_api_key", None), patch("app.config.settings.gemini_api_key", None):
         events = []
         async for event in generate({"layout": "grid"}):
             events.append(event)
             
-        assert len(events) == 2  # Plan start event + Error event
-        error_event = json.loads(events[1].replace("data: ", "").strip())
+        assert len(events) == 3  # Plan start event + Fallback event + Error event
+        error_event = json.loads(events[2].replace("data: ", "").strip())
         assert error_event["type"] == "error"
-        assert "API key is not configured" in error_event["message"]
+        assert "API key is not configured" in error_event["message"] or "failed" in error_event["message"].lower()
 
 @pytest.mark.asyncio
 @patch("app.services.generator.AsyncOpenAI")

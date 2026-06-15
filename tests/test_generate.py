@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 from uuid import uuid4
@@ -95,8 +95,20 @@ def test_improve_ui_validation_error():
     response = client.post("/improve-ui", json=payload)
     assert response.status_code == 422
 
-def test_list_projects():
-    """Test GET /projects stub route."""
+@patch("app.api.projects.db.get_projects", new_callable=AsyncMock)
+def test_list_projects(mock_get_projects):
+    """Test GET /projects route."""
+    mock_get_projects.return_value = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "user_id": "11111111-1111-1111-1111-111111111111",
+            "title": "Stub Project",
+            "prompt": "Build a cafe page",
+            "generated_code": "export function Cafe() {}",
+            "preview_url": None,
+            "created_at": "2026-06-14T17:00:00Z"
+        }
+    ]
     response = client.get("/projects")
     assert response.status_code == 200
     data = response.json()
@@ -104,18 +116,33 @@ def test_list_projects():
     assert len(data) > 0
     assert data[0]["title"] == "Stub Project"
 
-def test_get_project():
-    """Test GET /project/{project_id} stub route."""
+@patch("app.api.projects.db.get_project_by_id", new_callable=AsyncMock)
+def test_get_project(mock_get_project_by_id):
+    """Test GET /project/{project_id} route."""
     pid = str(uuid4())
+    mock_get_project_by_id.return_value = {
+        "id": pid,
+        "user_id": "11111111-1111-1111-1111-111111111111",
+        "title": "Stub Project",
+        "prompt": "Build a cafe page",
+        "generated_code": "export function Cafe() {}",
+        "preview_url": None,
+        "created_at": "2026-06-14T17:00:00Z"
+    }
     response = client.get(f"/project/{pid}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == pid
     assert data["title"] == "Stub Project"
 
-def test_delete_project():
-    """Test DELETE /project/{project_id} stub route."""
+@patch("app.api.projects.db.delete_project", new_callable=AsyncMock)
+def test_delete_project(mock_delete_project):
+    """Test DELETE /project/{project_id} route."""
     pid = str(uuid4())
+    mock_delete_project.return_value = {
+        "id": pid,
+        "user_id": "11111111-1111-1111-1111-111111111111"
+    }
     response = client.delete(f"/project/{pid}")
     assert response.status_code == 200
     data = response.json()

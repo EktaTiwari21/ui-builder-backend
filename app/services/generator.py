@@ -126,7 +126,16 @@ async def generate(plan: dict) -> AsyncGenerator[str, None]:
         from google import genai
         from google.genai import types
 
-        gemini_client = genai.Client(api_key=settings.gemini_api_key)
+        try:
+            if not settings.gemini_api_key:
+                raise ValueError("Gemini API key is not configured.")
+            gemini_client = genai.Client(api_key=settings.gemini_api_key)
+        except Exception as init_err:
+            logger.error(f"Failed to initialize Gemini client: {init_err}")
+            error_event = {"type": "error", "message": f"Gemini client initialization failed: {str(init_err)}"}
+            yield f"data: {json.dumps(error_event)}\n\n"
+            return
+
         fallback_models = [
             "gemini-2.5-flash",        # Latest, v1beta
             "gemini-2.0-flash",         # Stable, v1beta

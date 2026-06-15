@@ -23,7 +23,7 @@ def make_mock_stream(code_content="export function Comp() {}", tokens=100):
     events = [
         'data: {"type": "plan", "content": "Generating components..."}\n\n',
         f'data: {{"type": "chunk", "content": "{code_content}"}}\n\n',
-        f'data: {{"type": "done", "total_tokens": {tokens}}}\n\n'
+        f'data: {{"type": "generator_done", "total_tokens": {tokens}}}\n\n'
     ]
     return AsyncGenMock(events)
 
@@ -74,8 +74,8 @@ async def test_orchestrator_success_path(
     async for event in run(mock_request, user_id="user-id"):
         events.append(event)
 
-    # 1 (plan node start) + 1 (gen start) + 1 (chunk) + 1 (gen done) + 1 (orchestrator done) = 5 events
-    assert len(events) == 5
+    # 1 (plan node start) + 1 (gen start) + 1 (chunk) + 1 (orchestrator done) = 4 events
+    assert len(events) == 4
     
     # Assert last event is 'done' with project_id
     done_data = json.loads(events[-1].replace("data: ", "").strip())
