@@ -47,10 +47,18 @@ async def plan_node(state: AgentState) -> dict:
         return {"plan": plan_data}
     except PlannerError as pe:
         logger.error(f"Planning failed inside node: {pe}")
-        # Put error directly in event queue and raise to abort graph flow
-        error_msg = {"type": "error", "message": f"Planning failed: {str(pe)}"}
+        # Map internal error codes to friendly user messages
+        pe_str = str(pe)
+        if "MODEL_QUOTA_EXCEEDED" in pe_str or "quota" in pe_str.lower():
+            user_msg = "All AI models are currently at capacity. Please wait 60 seconds and try again."
+        elif "API key" in pe_str or "api_key" in pe_str.lower():
+            user_msg = "AI service configuration error. Please contact support."
+        else:
+            user_msg = "Planning failed. Please try a different or simpler prompt."
+        error_msg = {"type": "error", "message": user_msg}
         await state["event_queue"].put(f"data: {json.dumps(error_msg)}\n\n")
         raise pe
+
 
 # Node 3: Generate React / Tailwind component code
 async def generate_node(state: AgentState) -> dict:

@@ -63,10 +63,11 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
         )
 
         fallback_models = [
-            "gemini-2.5-flash",           # Latest, v1beta
-            "gemini-2.0-flash",            # Stable, v1beta
-            "gemini-2.0-flash-lite",       # Lightweight, v1beta
-            "gemini-1.5-flash-8b",         # Smallest, v1beta  
+            "gemini-2.5-flash",        # Latest preview
+            "gemini-2.0-flash",         # Stable
+            "gemini-2.0-flash-lite",    # Lightweight
+            "gemini-1.5-pro",           # Pro tier, separate quota pool
+            "gemini-1.5-flash",         # Stable flash
         ]
         last_critical_error = "MODEL_QUOTA_EXCEEDED"
         
@@ -145,14 +146,23 @@ async def plan(parsed_prompt: ParsedPrompt) -> dict:
                 except Exception as e:
                     err_str = str(e)
                     logger.error(f"Planning agent execution failed for {model_name}: {e}", exc_info=True)
-                    is_quota = "429" in err_str or "quota" in err_str.lower() or "RESOURCE_EXHAUSTED" in err_str
-                    if is_quota:
-                        logger.warning(f"Quota exceeded for {model_name} in planner. Stopping retries for this model.")
+                    # Treat quota, rate-limit AND model-not-found as 'try next model'
+                    is_skip = (
+                        "429" in err_str
+                        or "quota" in err_str.lower()
+                        or "RESOURCE_EXHAUSTED" in err_str
+                        or "NOT_FOUND" in err_str
+                        or "404" in err_str
+                        or "not found" in err_str.lower()
+                        or "not supported" in err_str.lower()
+                    )
+                    if is_skip:
+                        logger.warning(f"Model {model_name} unavailable (quota/not found). Trying next model.")
                         last_critical_error = "MODEL_QUOTA_EXCEEDED"
-                        break # Break inner loop, try next model
-                    
+                        break  # Break inner loop, try next model
+
                     last_critical_error = f"Planning agent execution failed: {str(e)}"
-                    break # Break inner loop, try next model
+                    break  # Break inner loop, try next model
 
         # If all fallback models failed
         if last_critical_error == "MODEL_QUOTA_EXCEEDED":
