@@ -106,7 +106,7 @@ def test_validate_disallowed_imports():
     assert any("unauthorized package" in warn.lower() for warn in result.warnings)
 
 def test_validate_unbalanced_tags():
-    """Test that unbalanced or mismatched opening/closing JSX tags are flagged as warnings."""
+    """Test that unbalanced or mismatched opening/closing JSX tags are flagged as validation errors."""
     code = """
     export function UnbalancedDemo() {
         return (
@@ -117,5 +117,6 @@ def test_validate_unbalanced_tags():
     }
     """
     result = validate(code)
-    assert result.is_valid
-    assert any("mismatched tags" in warn.lower() or "unbalanced" in warn.lower() for warn in result.warnings)
+    assert not result.is_valid
+    assert any("mismatched tags" in err.lower() or "unbalanced" in err.lower() for err in result.errors)
+

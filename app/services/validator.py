@@ -101,29 +101,171 @@ def is_valid_jsx_tag(tag_name: str) -> bool:
         return True
     return False
 
+def extract_jsx_tags(code: str) -> list[tuple[str, bool, bool]]:
+    """Tokenize JSX tags character by character, handling quotes and braces to bypass comparisons."""
+    i = 0
+    n = len(code)
+    tags = []
+    
+    in_double_quote = False
+    in_single_quote = False
+    in_backtick = False
+    
+    while i < n:
+        c = code[i]
+        
+        # Handle string literals outside tags or inside braces
+        if c == '"' and not in_single_quote and not in_backtick:
+            in_double_quote = not in_double_quote
+            i += 1
+            continue
+        if c == "'" and not in_double_quote and not in_backtick:
+            in_single_quote = not in_single_quote
+            i += 1
+            continue
+        if c == '`' and not in_double_quote and not in_single_quote:
+            in_backtick = not in_backtick
+            i += 1
+            continue
+            
+        if in_double_quote or in_single_quote or in_backtick:
+            i += 1
+            continue
+            
+        # Handle braces { }
+        if c == '{':
+            depth = 1
+            j = i + 1
+            sub_in_double_quote = False
+            sub_in_single_quote = False
+            sub_in_backtick = False
+            
+            while j < n and depth > 0:
+                sc = code[j]
+                if sc == '"' and not sub_in_single_quote and not sub_in_backtick:
+                    sub_in_double_quote = not sub_in_double_quote
+                elif sc == "'" and not sub_in_double_quote and not sub_in_backtick:
+                    sub_in_single_quote = not sub_in_single_quote
+                elif sc == '`' and not sub_in_double_quote and not sub_in_single_quote:
+                    sub_in_backtick = not sub_in_backtick
+                
+                if not (sub_in_double_quote or sub_in_single_quote or sub_in_backtick):
+                    if sc == '{':
+                        depth += 1
+                    elif sc == '}':
+                        depth -= 1
+                j += 1
+                
+            if depth == 0:
+                brace_content = code[i+1:j-1]
+                if not re.search(r"<[a-zA-Z_/>]", brace_content):
+                    i = j
+                    continue
+                else:
+                    i += 1
+                    continue
+            else:
+                i += 1
+                continue
+            
+        # Detect tag boundaries
+        if c == '<':
+            if i + 1 < n:
+                next_c = code[i+1]
+                if next_c == '>':
+                    tags.append(("Fragment", False, False))
+                    i += 2
+                    continue
+                elif next_c == '/' and i + 2 < n and code[i+2] == '>':
+                    tags.append(("Fragment", True, False))
+                    i += 3
+                    continue
+                    
+                is_closing = (next_c == '/')
+                start_name_idx = i + 2 if is_closing else i + 1
+                
+                if start_name_idx < n and (code[start_name_idx].isalpha() or code[start_name_idx] == '_'):
+                    tag_buffer = ""
+                    tag_i = start_name_idx
+                    
+                    # Extract tag name
+                    while tag_i < n:
+                        tc = code[tag_i]
+                        if tc.isalnum() or tc in '._-':
+                            tag_buffer += tc
+                            tag_i += 1
+                        else:
+                            break
+                            
+                    # Parse attributes
+                    tag_brace_depth = 0
+                    tag_in_double_quote = False
+                    tag_in_single_quote = False
+                    tag_in_backtick = False
+                    self_closing = False
+                    
+                    while tag_i < n:
+                        tc = code[tag_i]
+                        
+                        if tc == '"' and not tag_in_single_quote and not tag_in_backtick:
+                            tag_in_double_quote = not tag_in_double_quote
+                        elif tc == "'" and not tag_in_double_quote and not tag_in_backtick:
+                            tag_in_single_quote = not tag_in_single_quote
+                        elif tc == '`' and not tag_in_double_quote and not tag_in_single_quote:
+                            tag_in_backtick = not tag_in_backtick
+                            
+                        if tag_in_double_quote or tag_in_single_quote or tag_in_backtick:
+                            tag_i += 1
+                            continue
+                            
+                        if tc == '{':
+                            tag_brace_depth += 1
+                        elif tc == '}':
+                            if tag_brace_depth > 0:
+                                tag_brace_depth -= 1
+                                
+                        if tag_brace_depth > 0:
+                            tag_i += 1
+                            continue
+                            
+                        if tc == '/':
+                            peek_i = tag_i + 1
+                            while peek_i < n and code[peek_i].isspace():
+                                peek_i += 1
+                            if peek_i < n and code[peek_i] == '>':
+                                self_closing = True
+                                tag_i = peek_i
+                                break
+                        elif tc == '>':
+                            break
+                            
+                        tag_i += 1
+                        
+                    if tag_i < n and code[tag_i] == '>':
+                        tags.append((tag_buffer, is_closing, self_closing))
+                        i = tag_i + 1
+                        continue
+        i += 1
+        
+    return tags
+
 def _check_tags_balanced(code: str) -> list[str]:
     """Helper method to check if JSX tags are balanced using a simple tag stack.
     
-    Filters out comparison operator false positives by checking valid HTML tags
-    and React capitalized custom component names.
+    Filters out comparison operator false positives by parsing tags with a
+    state-machine tokenizer that ignores `<` and `>` inside JS expressions/braces.
     """
     issues = []
-    # Match tag names and optional attributes/separators
-    tag_pattern = re.compile(r"<(/?[a-zA-Z][a-zA-Z0-9\._-]*)(?:\s+[^<>]*?)?(/?)\s*>", re.DOTALL)
-    matches = tag_pattern.findall(code)
+    matches = extract_jsx_tags(code)
     
     stack = []
-    for tag_name, self_closing in matches:
-        if not is_valid_jsx_tag(tag_name):
+    for clean_name, is_closing, self_closing in matches:
+        if not is_valid_jsx_tag(clean_name):
             continue
 
         # If it's a self-closing tag (ends with /), skip pushing to stack
-        if self_closing == "/":
+        if self_closing:
             continue
-
-        # Remove leading slash for closing tag check
-        is_closing = tag_name.startswith("/")
-        clean_name = tag_name[1:] if is_closing else tag_name
 
         # Skip void HTML elements — they never have closing tags
         if clean_name.lower() in HTML_VOID_ELEMENTS and not is_closing:
