@@ -72,34 +72,49 @@ def validate(code: str) -> ValidationResult:
         if imp not in allowed_packages:
             warnings.append(f"Import from potentially unauthorized package: '{imp}'. Preferred: 'react' and 'lucide-react'.")
 
-    # Check 5: Basic JSX Tag Balance Check (lenient — warns only, does not fail)
+    # Check 5: Basic JSX Tag Balance Check (strict error)
     tag_errors = _check_tags_balanced(code_no_comments)
     if tag_errors:
-        # JSX balance issues are warnings, not hard errors
-        # Complex JSX with fragments, ternaries and maps frequently triggers
-        # false positives in regex-based parsers
-        warnings.extend(tag_errors)
+        errors.extend(tag_errors)
 
     is_valid = len(errors) == 0
     return ValidationResult(is_valid=is_valid, errors=errors, warnings=warnings)
 
+HTML_TAGS = {
+    "div", "span", "p", "a", "button", "img", "input", "h1", "h2", "h3", "h4", "h5", "h6",
+    "ul", "ol", "li", "section", "nav", "footer", "header", "main", "aside", "form", "label",
+    "select", "option", "textarea", "br", "hr", "svg", "path", "circle", "rect", "g",
+    "polygon", "polyline", "line", "text", "tspan", "iframe", "canvas", "video", "audio",
+    "table", "thead", "tbody", "tr", "th", "td", "details", "summary", "fieldset", "legend"
+}
+
+def is_valid_jsx_tag(tag_name: str) -> bool:
+    """Check if a matched tag name is a valid JSX HTML tag or a React Component."""
+    clean_name = tag_name[1:] if tag_name.startswith("/") else tag_name
+    if not clean_name:
+        return False
+    # 1. React custom component (starts with uppercase)
+    if clean_name[0].isupper():
+        return True
+    # 2. Standard HTML tag
+    if clean_name.lower() in HTML_TAGS:
+        return True
+    return False
+
 def _check_tags_balanced(code: str) -> list[str]:
     """Helper method to check if JSX tags are balanced using a simple tag stack.
     
-    Note: This is a best-effort check. Complex JSX with fragments, ternary renders,
-    and mapped components can produce false positives. Results are treated as warnings.
+    Filters out comparison operator false positives by checking valid HTML tags
+    and React capitalized custom component names.
     """
     issues = []
-    # Match tag names, supporting components (e.g. Dialog.Title) or standard HTML tags.
-    # Group 1 matches standard tag or component tag (e.g. /?div or /?Dialog.Title)
-    # Group 2 matches the optional closing slash for self-closing tags (e.g. <img />)
-    tag_pattern = re.compile(r"<(/?[a-zA-Z][a-zA-Z0-9\._-]*)(?:\s+[^>]*)?(/?)\s*>", re.DOTALL)
+    # Match tag names and optional attributes/separators
+    tag_pattern = re.compile(r"<(/?[a-zA-Z][a-zA-Z0-9\._-]*)(?:\s+[^>]*?)?(/?)\s*>", re.DOTALL)
     matches = tag_pattern.findall(code)
     
     stack = []
     for tag_name, self_closing in matches:
-        # Skip JSX fragments (empty tag name effectively, matched as <>)
-        if not tag_name or tag_name in ("", "/"):
+        if not is_valid_jsx_tag(tag_name):
             continue
 
         # If it's a self-closing tag (ends with /), skip pushing to stack
@@ -124,10 +139,11 @@ def _check_tags_balanced(code: str) -> list[str]:
                     issues.append(f"Mismatched tags: open <{top}> closed </{clean_name}>.")
         else:
             # Opening tag
-            stack.append(tag_name)
+            stack.append(clean_name)
             
     while stack:
         top = stack.pop()
         issues.append(f"Unbalanced opening tag: <{top}> with no matching closing tag.")
         
     return issues
+
