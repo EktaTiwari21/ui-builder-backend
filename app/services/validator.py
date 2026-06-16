@@ -109,7 +109,7 @@ def _check_tags_balanced(code: str) -> list[str]:
     """
     issues = []
     # Match tag names and optional attributes/separators
-    tag_pattern = re.compile(r"<(/?[a-zA-Z][a-zA-Z0-9\._-]*)(?:\s+[^>]*?)?(/?)\s*>", re.DOTALL)
+    tag_pattern = re.compile(r"<(/?[a-zA-Z][a-zA-Z0-9\._-]*)(?:\s+[^<>]*?)?(/?)\s*>", re.DOTALL)
     matches = tag_pattern.findall(code)
     
     stack = []
