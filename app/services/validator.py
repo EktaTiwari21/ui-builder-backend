@@ -32,8 +32,13 @@ def validate(code: str) -> ValidationResult:
     # Strip code comments to prevent scanning them for imports/dangerous keywords
     # 1. Multi-line comments: /* ... */
     # 2. Single-line comments: // ...
-    code_no_comments = re.sub(r"/\*.*?\*/", "", code, flags=re.DOTALL)
-    code_no_comments = re.sub(r"//.*", "", code_no_comments)
+    # Uses a string-aware parser regex to prevent stripping double slashes inside string literals (e.g. URLs in xmlns attributes)
+    comment_and_string_pattern = r'(/\*[\s\S]*?\*/|//[^\r\n]*)|("[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|`[^`\\]*(?:\\.[^`\\]*)*`)'
+    def _comment_replacer(match):
+        if match.group(1):
+            return ""
+        return match.group(2)
+    code_no_comments = re.sub(comment_and_string_pattern, _comment_replacer, code)
 
     # Check 1: Export Check
     # Must contain "export function", "export const", "export class", or "export default"
