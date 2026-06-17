@@ -87,7 +87,7 @@ async def generate(plan: dict) -> AsyncGenerator[str, None]:
                     {"role": "user", "content": f"Here is the UI design plan:\n{json.dumps(plan, indent=2)}"}
                 ],
                 stream=True,
-                max_tokens=4000,
+                max_tokens=8192,
                 stream_options={"include_usage": True}
             )
 
