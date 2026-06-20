@@ -247,3 +247,119 @@ async def generate(plan: dict) -> AsyncGenerator[str, None]:
             "message": "AI generation quota exhausted. Please try again later."
         }
         yield f"data: {json.dumps(quota_error_event)}\n\n"
+
+
+def sanitize_jsx_code(code: str) -> str:
+    cleaned = code.strip()
+    if cleaned.startswith("```"):
+        first_line_end = cleaned.find("\n")
+        if first_line_end != -1:
+            cleaned = cleaned[first_line_end+1:]
+        else:
+            cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    return cleaned.strip()
+
+
+async def improve(existing_code: str, instruction: str) -> str:
+    """Refine or improve existing React + Tailwind CSS code based on user feedback.
+    
+    Tries OpenAI first, and falls back to Gemini if quota is exhausted.
+    
+    Returns:
+        str: Refined React component JSX code.
+    """
+    openai_key = settings.openai_api_key or ""
+    skip_openai = not openai_key or openai_key.startswith("dummy") or openai_key == "sk-placeholder"
+    
+    is_quota_or_auth = skip_openai
+    
+    system_prompt = (
+        "You are an expert senior UI engineer and visual designer specializing in React and Tailwind CSS.\n"
+        "Your task is to take an existing React component and refine, modify, or improve it based on the user's feedback/instruction.\n\n"
+        "STRICT RULES:\n"
+        "1. Preserve the existing features and structure of the component, unless the user's feedback explicitly requests modifying or replacing them.\n"
+        "2. Ensure the layout remains high-fidelity, polished, and looks like it was designed by a top-tier design agency.\n"
+        "3. Make sure to use rich Tailwind gradients, transitions, hover effects, rounded corners, and shadow utilities.\n"
+        "4. For images, always use premium high-quality Unsplash URLs (e.g. from https://images.unsplash.com/...) with descriptive topic keywords rather than local assets.\n"
+        "5. All components must be fully self-contained with imports included.\n"
+        "6. OUTPUT: Valid JSX only. No markdown (like ```jsx ... ```). No explanation. No backticks."
+    )
+    
+    user_prompt = (
+        f"Here is the existing React + Tailwind CSS code:\n\n{existing_code}\n\n"
+        f"Here is the user's refinement feedback/instruction:\n\n{instruction}\n\n"
+        "Please rewrite the component to incorporate the feedback."
+    )
+    
+    if not skip_openai:
+        try:
+            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=8192
+            )
+            code = response.choices[0].message.content
+            if code:
+                return sanitize_jsx_code(code)
+        except Exception as e:
+            logger.error(f"OpenAI improve failed: {e}")
+            is_quota_or_auth = (
+                "insufficient_quota" in str(e)
+                or "RateLimitError" in type(e).__name__
+                or "AuthenticationError" in type(e).__name__
+                or "api_key" in str(e).lower()
+            )
+            if not is_quota_or_auth:
+                raise e
+
+    if is_quota_or_auth:
+        logger.warning("Initiating Gemini fallback for code improvement...")
+        from google import genai
+        from google.genai import types
+        
+        try:
+            if not settings.gemini_api_key:
+                raise ValueError("Gemini API key is not configured.")
+            gemini_client = genai.Client(api_key=settings.gemini_api_key)
+        except Exception as init_err:
+            logger.error(f"Failed to initialize Gemini client: {init_err}")
+            raise init_err
+            
+        fallback_models = [
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-flash-latest",
+            "gemini-2.5-pro",
+        ]
+        
+        for model_name in fallback_models:
+            logger.info(f"Initiating fallback to {model_name} for code improvement...")
+            try:
+                gemini_response = await gemini_client.aio.models.generate_content(
+                    model=model_name,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        max_output_tokens=8192
+                    )
+                )
+                if gemini_response.text:
+                    return sanitize_jsx_code(gemini_response.text)
+            except Exception as gemini_err:
+                err_str = str(gemini_err)
+                is_quota = "429" in err_str or "quota" in err_str.lower() or "RESOURCE_EXHAUSTED" in err_str or "NOT_FOUND" in err_str
+                if is_quota:
+                    logger.warning(f"Quota/not-found for {model_name} during improve. Trying next model.")
+                    continue
+                logger.error(f"Gemini improve failed on model {model_name}: {gemini_err}")
+                
+        raise RuntimeError("All AI models are currently at capacity. Please try again later.")
+

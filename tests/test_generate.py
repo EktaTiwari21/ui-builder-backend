@@ -72,19 +72,38 @@ def test_generate_ui_validation_error():
     response = client.post("/generate-ui", json=payload)
     assert response.status_code == 422
 
-def test_improve_ui_success():
-    """Test POST /improve-ui stub route."""
+@patch("app.api.improve.supabase.get_project_by_id", new_callable=AsyncMock)
+@patch("app.api.improve.generator.improve", new_callable=AsyncMock)
+@patch("app.api.improve.supabase.update_project_code", new_callable=AsyncMock)
+@patch("app.api.improve.supabase.log_generation", new_callable=AsyncMock)
+@patch("app.api.improve.supabase.increment_generations", new_callable=AsyncMock)
+def test_improve_ui_success(mock_increment, mock_log, mock_update_code, mock_improve, mock_get_project):
+    """Test successful UI improvement POST /improve-ui."""
     pid = str(uuid4())
+    mock_get_project.return_value = {
+        "id": pid,
+        "generated_code": "export function Test() {}"
+    }
+    mock_improve.return_value = "export function TestRefined() {}"
+    mock_update_code.return_value = {
+        "id": pid,
+        "generated_code": "export function TestRefined() {}"
+    }
+    
     payload = {
         "project_id": pid,
         "instruction": "Make the header larger"
     }
+    
     response = client.post("/improve-ui", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "stub"
-    assert data["received"]["project_id"] == pid
-    assert data["received"]["instruction"] == "Make the header larger"
+    assert data["code"] == "export function TestRefined() {}"
+    
+    mock_get_project.assert_called_once_with(pid, "11111111-1111-1111-1111-111111111111")
+    mock_improve.assert_called_once_with("export function Test() {}", "Make the header larger")
+    mock_update_code.assert_called_once_with(pid, "export function TestRefined() {}")
+
 
 def test_improve_ui_validation_error():
     """Test POST /improve-ui yields 422 if project_id is invalid uuid."""
