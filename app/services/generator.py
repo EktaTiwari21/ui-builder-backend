@@ -37,6 +37,7 @@ STRICT STYLING RULES:
 - Add CSS animations via Tailwind: animate-pulse for loading, animate-bounce for CTAs
 - Use a cohesive color palette — pick one accent color and use it consistently
 - Include micro-interactions: group hover effects using group and group-hover:
+- For images, always use premium high-quality Unsplash URLs (e.g. from https://images.unsplash.com/...) with descriptive topic keywords (e.g. product, technology, coffee, modern office, profile avatar) rather than local assets.
 - All components must be fully self-contained with imports included
 
 OUTPUT: Valid JSX only. No markdown. No explanation. No backticks."""
