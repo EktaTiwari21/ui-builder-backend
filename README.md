@@ -149,4 +149,4 @@ docker run -p 7860:7860 --env-file .env ui-builder-backend
 ```
 
 ### Hugging Face Spaces
-This project is configured for deployment on Hugging Face Spaces using Docker. Ensure your space has the appropriate environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY`, etc.) configured in its settings dashboard.
+This project is configured for deployment on Hugging Face Spaces using Docker. Ensure your space has the appropriate environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY`, etc.) configured in its settings dashboard. (Deployment Update: 2026-06-20)
