@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from app.db.supabase import get_supabase_client
+from app.db.supabase import get_supabase_client, get_supabase_auth_client
 from supabase_auth.errors import AuthApiError
 from app.config import settings
 import sys
@@ -47,7 +47,7 @@ async def get_current_user(
         token = credentials.credentials if credentials else None
         if token:
             try:
-                client = await get_supabase_client()
+                client = await get_supabase_auth_client()
                 response = await client.auth.get_user(token)
                 if response and response.user:
                     return response.user
@@ -76,7 +76,7 @@ async def get_current_user(
 
     token = credentials.credentials
     try:
-        client = await get_supabase_client()
+        client = await get_supabase_auth_client()
         response = await client.auth.get_user(token)
 
         if response and response.user:

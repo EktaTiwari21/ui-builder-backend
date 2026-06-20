@@ -4,6 +4,7 @@ from typing import Optional
 import logging
 
 _supabase_client: Optional[AsyncClient] = None
+_supabase_auth_client: Optional[AsyncClient] = None
 logger = logging.getLogger(__name__)
 
 async def get_supabase_client() -> AsyncClient:
@@ -19,6 +20,23 @@ async def get_supabase_client() -> AsyncClient:
             settings.supabase_service_key
         )
     return _supabase_client
+
+async def get_supabase_auth_client() -> AsyncClient:
+    """Initialize or return a separate asynchronous Supabase client for Auth operations.
+    
+    This prevents auth state changes (like session updates or token verifications)
+    from mutating the main DB client's authorization headers and triggering RLS errors.
+    
+    Returns:
+        AsyncClient: The initialized Supabase auth client instance.
+    """
+    global _supabase_auth_client
+    if _supabase_auth_client is None:
+        _supabase_auth_client = await acreate_client(
+            settings.supabase_url,
+            settings.supabase_service_key
+        )
+    return _supabase_auth_client
 
 async def get_projects(user_id: str) -> list[dict]:
     """Retrieve all projects for a specific user.

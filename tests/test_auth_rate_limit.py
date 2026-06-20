@@ -20,7 +20,7 @@ def mock_credentials():
 # ----------------- Auth Dependency Tests -----------------
 
 @pytest.mark.asyncio
-@patch("app.middleware.auth.get_supabase_client")
+@patch("app.middleware.auth.get_supabase_auth_client")
 async def test_get_current_user_success(mock_get_db, mock_credentials, mock_user):
     """Test get_current_user succeeds when token is verified successfully by Supabase Auth."""
     mock_client = MagicMock()
@@ -34,7 +34,7 @@ async def test_get_current_user_success(mock_get_db, mock_credentials, mock_user
     mock_client.auth.get_user.assert_called_once_with("valid-token-xyz")
 
 @pytest.mark.asyncio
-@patch("app.middleware.auth.get_supabase_client")
+@patch("app.middleware.auth.get_supabase_auth_client")
 async def test_get_current_user_invalid_token(mock_get_db, mock_credentials):
     """Test get_current_user raises 401 when token is invalid or expired."""
     mock_client = MagicMock()
@@ -47,7 +47,7 @@ async def test_get_current_user_invalid_token(mock_get_db, mock_credentials):
     assert exc_info.value.detail["code"] == "INVALID_TOKEN"
 
 @pytest.mark.asyncio
-@patch("app.middleware.auth.get_supabase_client")
+@patch("app.middleware.auth.get_supabase_auth_client")
 async def test_get_current_user_api_error(mock_get_db, mock_credentials):
     """Test get_current_user raises 401 when Supabase Auth raises an API error."""
     mock_client = MagicMock()
@@ -136,7 +136,7 @@ async def test_check_rate_limit_creates_profile_if_missing(mock_get_db, mock_use
 # ─────────────────── TOKEN_EXPIRED structured error tests ───────────────────
 
 @pytest.mark.asyncio
-@patch("app.middleware.auth.get_supabase_client")
+@patch("app.middleware.auth.get_supabase_auth_client")
 async def test_get_current_user_expired_jwt_keyword(mock_get_db, mock_credentials):
     """Test 'JWT expired' in AuthApiError message → 401 with code=TOKEN_EXPIRED."""
     mock_client = MagicMock()
@@ -153,7 +153,7 @@ async def test_get_current_user_expired_jwt_keyword(mock_get_db, mock_credential
 
 
 @pytest.mark.asyncio
-@patch("app.middleware.auth.get_supabase_client")
+@patch("app.middleware.auth.get_supabase_auth_client")
 async def test_get_current_user_token_is_expired_keyword(mock_get_db, mock_credentials):
     """Test 'token is expired' variant in AuthApiError → 401 with code=TOKEN_EXPIRED."""
     mock_client = MagicMock()
@@ -172,7 +172,7 @@ async def test_get_current_user_token_is_expired_keyword(mock_get_db, mock_crede
 # ─────────────────── /auth/refresh endpoint tests ───────────────────────────
 
 @pytest.mark.asyncio
-@patch("app.api.auth.get_supabase_client")
+@patch("app.api.auth.get_supabase_auth_client")
 async def test_refresh_session_success(mock_get_db):
     """Test POST /auth/refresh with valid refresh token returns new token pair."""
     from app.api.auth import refresh_session
@@ -203,7 +203,7 @@ async def test_refresh_session_success(mock_get_db):
 
 
 @pytest.mark.asyncio
-@patch("app.api.auth.get_supabase_client")
+@patch("app.api.auth.get_supabase_auth_client")
 async def test_refresh_session_invalid_token(mock_get_db):
     """Test POST /auth/refresh with invalid refresh token → 401 REFRESH_FAILED."""
     from app.api.auth import refresh_session

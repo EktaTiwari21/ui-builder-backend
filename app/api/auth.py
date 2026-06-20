@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, HTTPException, status
-from app.db.supabase import get_supabase_client
+from app.db.supabase import get_supabase_client, get_supabase_auth_client
 from app.models.requests import RefreshRequest
 from supabase_auth.errors import AuthApiError
 
@@ -28,7 +28,7 @@ async def refresh_session(body: RefreshRequest):
         HTTPException 500 with ``code=INTERNAL_REFRESH_ERROR`` — unexpected server error.
     """
     try:
-        client = await get_supabase_client()
+        client = await get_supabase_auth_client()
         response = await client.auth.refresh_session(body.refresh_token)
 
         if not response or not response.session:
